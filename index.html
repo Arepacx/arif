@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>RFID Attendance Dashboard</title>
+
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -18,10 +19,28 @@
         margin-bottom: 20px;
         font-weight: bold;
     }
+
+    button {
+        display: block;
+        margin: 0 auto;
+        padding: 10px 20px;
+        border: none;
+        background: #dc3545;
+        color: white;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-bottom: 20px;
+    }
+    button:hover {
+        background: #b52b39;
+    }
+
     table {
         width: 100%;
         border-collapse: collapse;
         background: white;
+        margin-top: 20px;
     }
     table, th, td {
         border: 1px solid #ddd;
@@ -42,7 +61,25 @@
         color: red;
         font-weight: bold;
     }
+
+    /* PIE CHART CARD */
+    #chartContainer {
+        width: 350px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #percentText {
+        text-align: center;
+        font-size: 18px;
+        margin-top: 10px;
+        font-weight: bold;
+    }
 </style>
+
 </head>
 
 <body>
@@ -50,6 +87,15 @@
 <h1>RFID Attendance Dashboard</h1>
 <div id="clock">Loading clock...</div>
 
+<button id="resetBtn">RESET ATTENDANCE</button>
+
+<!-- ----------------- PIE CHART ----------------- -->
+<div id="chartContainer">
+    <canvas id="attendanceChart"></canvas>
+    <div id="percentText">Loading...</div>
+</div>
+
+<!-- ----------------- TABLE ----------------- -->
 <table>
     <thead>
         <tr>
@@ -62,16 +108,18 @@
     <tbody id="studentTable"></tbody>
 </table>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script type="module">
 
 // --------------------------------------------------
 // FIREBASE IMPORTS
 // --------------------------------------------------
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // --------------------------------------------------
-// YOUR FIREBASE CONFIG
+// FIREBASE CONFIG
 // --------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyAbjjUJM8wzV23jeYEnGZ_qIBz2y_5IoDY",
@@ -91,7 +139,7 @@ const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
 // --------------------------------------------------
-// LIVE CLOCK (24H FORMAT)
+// LIVE CLOCK
 // --------------------------------------------------
 function updateClock() {
     const now = new Date();
@@ -103,6 +151,64 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // --------------------------------------------------
+// CHART SETUP
+// --------------------------------------------------
+const ctx = document.getElementById("attendanceChart");
+let attendanceChart = new Chart(ctx, {
+    type: "pie",
+    data: {
+        labels: ["Present", "Absent"],
+        datasets: [{
+            data: [0, 0],
+            backgroundColor: ["#28a745", "#dc3545"]
+        }]
+    },
+    options: {
+        responsive: true
+    }
+});
+
+// --------------------------------------------------
+// FUNCTION: MANUAL RESET
+// --------------------------------------------------
+async function resetAttendance() {
+    if (!confirm("Are you sure you want to RESET attendance?")) return;
+
+    const attendanceRef = ref(db, "attendance/");
+
+    onValue(attendanceRef, async (snapshot) => {
+        snapshot.forEach(uidSnapshot => {
+            const uid = uidSnapshot.key;
+            const logsRef = ref(db, `attendance/${uid}/logs`);
+            remove(logsRef); // clears logs
+        });
+    }, { onlyOnce: true });
+
+    alert("Attendance has been RESET.");
+}
+
+document.getElementById("resetBtn").addEventListener("click", resetAttendance);
+
+// --------------------------------------------------
+// AUTO-RESET AT MIDNIGHT
+// --------------------------------------------------
+function scheduleMidnightReset() {
+    const now = new Date();
+    const midnight = new Date();
+
+    midnight.setHours(24, 0, 0, 0);
+
+    const timeUntilMidnight = midnight - now;
+
+    setTimeout(() => {
+        resetAttendance();
+        scheduleMidnightReset(); // schedule again for next day
+    }, timeUntilMidnight);
+}
+
+scheduleMidnightReset();
+
+// --------------------------------------------------
 // LOAD ATTENDANCE DATA
 // --------------------------------------------------
 const tableBody = document.getElementById("studentTable");
@@ -111,13 +217,18 @@ const attendanceRef = ref(db, "attendance/");
 onValue(attendanceRef, (snapshot) => {
     tableBody.innerHTML = "";
 
+    let presentCount = 0;
+    let totalStudents = 0;
+
     snapshot.forEach(uidSnapshot => {
+        totalStudents++;
+
         const uid = uidSnapshot.key;
         const name = uidSnapshot.child("name").val() || "Unknown";
 
-        // latest timestamp from logs
         let lastTime = "-";
         let status = `<span class="absent">Not Present</span>`;
+        let isPresent = false;
 
         if (uidSnapshot.hasChild("logs")) {
             const logs = uidSnapshot.child("logs").val();
@@ -129,8 +240,11 @@ onValue(attendanceRef, (snapshot) => {
 
                 lastTime = dateObj.toLocaleString("en-GB", { hour12: false });
                 status = `<span class="present">Present</span>`;
+                isPresent = true;
             }
         }
+
+        if (isPresent) presentCount++;
 
         const row = `
             <tr>
@@ -140,12 +254,20 @@ onValue(attendanceRef, (snapshot) => {
                 <td>${status}</td>
             </tr>
         `;
-
         tableBody.innerHTML += row;
     });
+
+    const absentCount = totalStudents - presentCount;
+    attendanceChart.data.datasets[0].data = [presentCount, absentCount];
+    attendanceChart.update();
+
+    const presentPercent = totalStudents > 0 ? (presentCount / totalStudents * 100).toFixed(1) : 0;
+    const absentPercent = totalStudents > 0 ? (absentCount / totalStudents * 100).toFixed(1) : 0;
+
+    document.getElementById("percentText").innerHTML =
+        `Present: ${presentPercent}% | Absent: ${absentPercent}%`;
 });
 </script>
 
 </body>
 </html>
-
