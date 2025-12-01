@@ -20,19 +20,27 @@
         font-weight: bold;
     }
 
-    button {
+    /* Buttons */
+    .btn {
         display: block;
         margin: 0 auto;
         padding: 10px 20px;
         border: none;
-        background: #dc3545;
+        background: #007bff;
         color: white;
         border-radius: 6px;
         font-size: 16px;
         cursor: pointer;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
     }
-    button:hover {
+    .btn:hover {
+        background: #0056b3;
+    }
+
+    #resetBtn {
+        background: #dc3545;
+    }
+    #resetBtn:hover {
         background: #b52b39;
     }
 
@@ -79,7 +87,6 @@
         font-weight: bold;
     }
 </style>
-
 </head>
 
 <body>
@@ -87,15 +94,17 @@
 <h1>RFID Attendance Dashboard</h1>
 <div id="clock">Loading clock...</div>
 
-<button id="resetBtn">RESET ATTENDANCE</button>
+<!-- Admin Login + Reset Buttons -->
+<button class="btn" id="loginBtn">ADMIN LOGIN</button>
+<button class="btn" id="resetBtn" style="display:none;">RESET ATTENDANCE</button>
 
-<!-- ----------------- PIE CHART ----------------- -->
+<!-- PIE CHART -->
 <div id="chartContainer">
     <canvas id="attendanceChart"></canvas>
     <div id="percentText">Loading...</div>
 </div>
 
-<!-- ----------------- TABLE ----------------- -->
+<!-- TABLE -->
 <table>
     <thead>
         <tr>
@@ -112,15 +121,21 @@
 
 <script type="module">
 
-// --------------------------------------------------
-// FIREBASE IMPORTS
-// --------------------------------------------------
+/* --------------------------------------------------
+   FIREBASE IMPORTS
+-------------------------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { 
+    getDatabase, ref, onValue, remove 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// --------------------------------------------------
-// FIREBASE CONFIG
-// --------------------------------------------------
+import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+/* --------------------------------------------------
+   FIREBASE CONFIG
+-------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAbjjUJM8wzV23jeYEnGZ_qIBz2y_5IoDY",
   authDomain: "buzzer-5dbb9.firebaseapp.com",
@@ -128,19 +143,24 @@ const firebaseConfig = {
   projectId: "buzzer-5dbb9",
   storageBucket: "buzzer-5dbb9.appspot.com",
   messagingSenderId: "875632771159",
-  appId: "1:875632771159:web:9bd7cbda99e09a31f16312",
-  measurementId: "G-T6Q5X0CZ61"
+  appId: "1:875632771159:web:9bd7cbda99e09a31f16312"
 };
 
-// --------------------------------------------------
-// INITIALIZE FIREBASE
-// --------------------------------------------------
+/* --------------------------------------------------
+   INITIALIZE APP
+-------------------------------------------------- */
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
+const auth = getAuth();
 
-// --------------------------------------------------
-// LIVE CLOCK
-// --------------------------------------------------
+/* --------------------------------------------------
+   ADMIN EMAIL (CHANGE THIS)
+-------------------------------------------------- */
+const ADMIN_EMAIL = "4km4lnov@gmail.com";
+
+/* --------------------------------------------------
+   LIVE CLOCK
+-------------------------------------------------- */
 function updateClock() {
     const now = new Date();
     const date = now.toLocaleDateString("en-GB");
@@ -150,9 +170,9 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// --------------------------------------------------
-// CHART SETUP
-// --------------------------------------------------
+/* --------------------------------------------------
+   CHART SETUP
+-------------------------------------------------- */
 const ctx = document.getElementById("attendanceChart");
 let attendanceChart = new Chart(ctx, {
     type: "pie",
@@ -163,16 +183,41 @@ let attendanceChart = new Chart(ctx, {
             backgroundColor: ["#28a745", "#dc3545"]
         }]
     },
-    options: {
-        responsive: true
+    options: { responsive: true }
+});
+
+/* --------------------------------------------------
+   LOGIN BUTTON
+-------------------------------------------------- */
+document.getElementById("loginBtn").onclick = () => {
+    const email = prompt("Enter admin email:");
+    const pass = prompt("Enter password:");
+
+    signInWithEmailAndPassword(auth, email, pass)
+        .then(() => alert("Login successful"))
+        .catch(() => alert("Login failed"));
+};
+
+/* --------------------------------------------------
+   AUTH STATE LISTENER
+   - Only show RESET BUTTON if admin logged in
+-------------------------------------------------- */
+onAuthStateChanged(auth, user => {
+    if (user && user.email === ADMIN_EMAIL) {
+        document.getElementById("resetBtn").style.display = "block";
+        document.getElementById("loginBtn").innerText = "LOGOUT";
+        document.getElementById("loginBtn").onclick = () => signOut(auth);
+    } else {
+        document.getElementById("resetBtn").style.display = "none";
+        document.getElementById("loginBtn").innerText = "ADMIN LOGIN";
     }
 });
 
-// --------------------------------------------------
-// FUNCTION: MANUAL RESET
-// --------------------------------------------------
+/* --------------------------------------------------
+   MANUAL RESET FUNCTION (Admin only)
+-------------------------------------------------- */
 async function resetAttendance() {
-    if (!confirm("Are you sure you want to RESET attendance?")) return;
+    if (!confirm("RESET all attendance?")) return;
 
     const attendanceRef = ref(db, "attendance/");
 
@@ -180,37 +225,35 @@ async function resetAttendance() {
         snapshot.forEach(uidSnapshot => {
             const uid = uidSnapshot.key;
             const logsRef = ref(db, `attendance/${uid}/logs`);
-            remove(logsRef); // clears logs
+            remove(logsRef);
         });
     }, { onlyOnce: true });
 
-    alert("Attendance has been RESET.");
+    alert("Attendance RESET successfully.");
 }
 
-document.getElementById("resetBtn").addEventListener("click", resetAttendance);
+document.getElementById("resetBtn").onclick = resetAttendance;
 
-// --------------------------------------------------
-// AUTO-RESET AT MIDNIGHT
-// --------------------------------------------------
+/* --------------------------------------------------
+   AUTO-RESET AT MIDNIGHT
+-------------------------------------------------- */
 function scheduleMidnightReset() {
     const now = new Date();
     const midnight = new Date();
-
     midnight.setHours(24, 0, 0, 0);
 
     const timeUntilMidnight = midnight - now;
 
     setTimeout(() => {
         resetAttendance();
-        scheduleMidnightReset(); // schedule again for next day
+        scheduleMidnightReset();
     }, timeUntilMidnight);
 }
-
 scheduleMidnightReset();
 
-// --------------------------------------------------
-// LOAD ATTENDANCE DATA
-// --------------------------------------------------
+/* --------------------------------------------------
+   LOAD & DISPLAY ATTENDANCE
+-------------------------------------------------- */
 const tableBody = document.getElementById("studentTable");
 const attendanceRef = ref(db, "attendance/");
 
