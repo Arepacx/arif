@@ -200,7 +200,6 @@ document.getElementById("loginBtn").onclick = () => {
 
 /* --------------------------------------------------
    AUTH STATE LISTENER
-   - Only show RESET BUTTON if admin logged in
 -------------------------------------------------- */
 onAuthStateChanged(auth, user => {
     if (user && user.email === ADMIN_EMAIL) {
@@ -214,7 +213,7 @@ onAuthStateChanged(auth, user => {
 });
 
 /* --------------------------------------------------
-   MANUAL RESET FUNCTION (Admin only)
+   MANUAL RESET FUNCTION
 -------------------------------------------------- */
 async function resetAttendance() {
     if (!confirm("RESET all attendance?")) return;
@@ -235,7 +234,7 @@ async function resetAttendance() {
 document.getElementById("resetBtn").onclick = resetAttendance;
 
 /* --------------------------------------------------
-   AUTO-RESET AT MIDNIGHT
+   AUTO RESET AT MIDNIGHT
 -------------------------------------------------- */
 function scheduleMidnightReset() {
     const now = new Date();
@@ -252,25 +251,22 @@ function scheduleMidnightReset() {
 scheduleMidnightReset();
 
 /* --------------------------------------------------
-   LOAD & DISPLAY ATTENDANCE
+   LOAD + SORT + DISPLAY ATTENDANCE
 -------------------------------------------------- */
 const tableBody = document.getElementById("studentTable");
 const attendanceRef = ref(db, "attendance/");
 
 onValue(attendanceRef, (snapshot) => {
-    tableBody.innerHTML = "";
 
+    const studentList = [];
     let presentCount = 0;
-    let totalStudents = 0;
 
     snapshot.forEach(uidSnapshot => {
-        totalStudents++;
 
         const uid = uidSnapshot.key;
         const name = uidSnapshot.child("name").val() || "Unknown";
 
         let lastTime = "-";
-        let status = `<span class="absent">Not Present</span>`;
         let isPresent = false;
 
         if (uidSnapshot.hasChild("logs")) {
@@ -282,30 +278,49 @@ onValue(attendanceRef, (snapshot) => {
                 const dateObj = new Date(parseInt(latest));
 
                 lastTime = dateObj.toLocaleString("en-GB", { hour12: false });
-                status = `<span class="present">Present</span>`;
                 isPresent = true;
             }
         }
 
         if (isPresent) presentCount++;
 
-        const row = `
+        studentList.push({
+            uid,
+            name,
+            lastTime,
+            isPresent
+        });
+    });
+
+    /* SORT: absent first, present last */
+    studentList.sort((a, b) => a.isPresent - b.isPresent);
+
+    /* RENDER TABLE */
+    tableBody.innerHTML = "";
+    studentList.forEach(student => {
+        const status = student.isPresent
+            ? `<span class="present">Present</span>`
+            : `<span class="absent">Not Present</span>`;
+
+        tableBody.innerHTML += `
             <tr>
-                <td>${uid}</td>
-                <td>${name}</td>
-                <td>${lastTime}</td>
+                <td>${student.uid}</td>
+                <td>${student.name}</td>
+                <td>${student.lastTime}</td>
                 <td>${status}</td>
             </tr>
         `;
-        tableBody.innerHTML += row;
     });
 
-    const absentCount = totalStudents - presentCount;
+    /* UPDATE CHART */
+    const total = studentList.length;
+    const absentCount = total - presentCount;
+
     attendanceChart.data.datasets[0].data = [presentCount, absentCount];
     attendanceChart.update();
 
-    const presentPercent = totalStudents > 0 ? (presentCount / totalStudents * 100).toFixed(1) : 0;
-    const absentPercent = totalStudents > 0 ? (absentCount / totalStudents * 100).toFixed(1) : 0;
+    const presentPercent = total > 0 ? (presentCount / total * 100).toFixed(1) : 0;
+    const absentPercent = total > 0 ? (absentCount / total * 100).toFixed(1) : 0;
 
     document.getElementById("percentText").innerHTML =
         `Present: ${presentPercent}% | Absent: ${absentPercent}%`;
