@@ -13,7 +13,7 @@ body {
 h1 { text-align: center; }
 #clock {
     text-align: center;
-    font-size: 20px;
+    font-size: 18px;
     margin-bottom: 15px;
     font-weight: bold;
 }
@@ -54,7 +54,6 @@ th { background: #007bff; color: white; }
     cursor: pointer;
     color: white;
 }
-.editBtn { background:#ffc107; color:black; }
 .deleteBtn { background:#dc3545; }
 
 #chartContainer {
@@ -100,7 +99,7 @@ th { background: #007bff; color: white; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update, remove, get } 
+import { getDatabase, ref, onValue, get, set, remove } 
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
 from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -159,6 +158,17 @@ onAuthStateChanged(auth, user => {
   loginBtn.onclick = admin ? () => signOut(auth) : loginBtn.onclick;
 });
 
+/* ================= UID LOOKUP (students) ================= */
+const matrixToUID = {};
+
+onValue(ref(db, "students"), snapshot => {
+  snapshot.forEach(child => {
+    const uid = child.key;
+    const matrix = child.child("matrix").val();
+    if (matrix) matrixToUID[matrix] = uid;
+  });
+});
+
 /* ================= ADD STUDENT ================= */
 addBtn.onclick = async () => {
   const uid = prompt("RFID UID:");
@@ -181,22 +191,22 @@ window.deleteStudent = async (uid, matrix) => {
   await remove(ref(db, `students/${uid}`));
   await remove(ref(db, `attendance/${matrix}`));
 
-  alert("Card removed. Admin must re-register.");
+  alert("Card deleted. Re-register required.");
 };
 
-/* ================= RESET FIX (ALL ROWS) ================= */
+/* ================= RESET FIX (ALL STUDENTS) ================= */
 resetBtn.onclick = async () => {
   if (!confirm("Reset attendance status for ALL students?")) return;
 
   const snap = await get(ref(db, "attendance"));
-  const promises = [];
+  const tasks = [];
 
   snap.forEach(child => {
-    promises.push(remove(ref(db, `attendance/${child.key}/logs`)));
+    tasks.push(remove(ref(db, `attendance/${child.key}/logs`)));
   });
 
-  await Promise.all(promises);
-  alert("Attendance reset successfully");
+  await Promise.all(tasks);
+  alert("Attendance reset completed");
 };
 
 /* ================= LOAD ATTENDANCE ================= */
@@ -209,7 +219,7 @@ onValue(ref(db, "attendance"), snapshot => {
     total++;
     const matrix = child.key;
     const name = child.child("name").val() || "Unknown";
-    const uid = child.child("uid").val() || "-";
+    const uid = matrixToUID[matrix] || "-";
 
     let date = "-", time = "-", isPresent = false;
     if (child.hasChild("logs")) {
