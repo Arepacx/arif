@@ -10,20 +10,16 @@
         padding: 20px;
         background: #f4f4f4;
     }
-    h1 {
-        text-align: center;
-    }
+    h1 { text-align: center; }
     #clock {
         text-align: center;
         font-size: 20px;
         margin-bottom: 20px;
         font-weight: bold;
     }
-
-    /* Buttons */
     .btn {
         display: block;
-        margin: 0 auto;
+        margin: 0 auto 10px;
         padding: 10px 20px;
         border: none;
         background: #007bff;
@@ -31,46 +27,25 @@
         border-radius: 6px;
         font-size: 16px;
         cursor: pointer;
-        margin-bottom: 10px;
     }
-    .btn:hover {
-        background: #0056b3;
-    }
-
-    #resetBtn {
-        background: #dc3545;
-    }
-    #resetBtn:hover {
-        background: #b52b39;
-    }
-
+    #resetBtn { background: #dc3545; }
     table {
         width: 100%;
         border-collapse: collapse;
         background: white;
         margin-top: 20px;
     }
-    table, th, td {
-        border: 1px solid #ddd;
-    }
     th, td {
         padding: 12px;
         text-align: center;
+        border: 1px solid #ddd;
     }
     th {
         background: #007bff;
         color: white;
     }
-    .present {
-        color: green;
-        font-weight: bold;
-    }
-    .absent {
-        color: red;
-        font-weight: bold;
-    }
-
-    /* PIE CHART CARD */
+    .present { color: green; font-weight: bold; }
+    .absent { color: red; font-weight: bold; }
     #chartContainer {
         width: 350px;
         margin: 0 auto;
@@ -78,13 +53,6 @@
         padding: 20px;
         border-radius: 10px;
         margin-top: 10px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    #percentText {
-        text-align: center;
-        font-size: 18px;
-        margin-top: 10px;
-        font-weight: bold;
     }
 </style>
 </head>
@@ -92,89 +60,63 @@
 <body>
 
 <h1>RFID Attendance Dashboard</h1>
-<div id="clock">Loading clock...</div>
+<div id="clock"></div>
 
-<!-- Admin Login + Reset Buttons -->
 <button class="btn" id="loginBtn">ADMIN LOGIN</button>
 <button class="btn" id="resetBtn" style="display:none;">RESET ATTENDANCE</button>
 
-<!-- PIE CHART -->
 <div id="chartContainer">
     <canvas id="attendanceChart"></canvas>
-    <div id="percentText">Loading...</div>
+    <div id="percentText"></div>
 </div>
 
-<!-- TABLE -->
 <table>
-    <thead>
-        <tr>
-            <th>Matric Number</th>
-            <th>Name</th>
-            <th>Last Scan Time</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-    <tbody id="studentTable"></tbody>
+<thead>
+<tr>
+    <th>Matric Number</th>
+    <th>Name</th>
+    <th>Date</th>
+    <th>Time</th>
+    <th>Status</th>
+</tr>
+</thead>
+<tbody id="studentTable"></tbody>
 </table>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script type="module">
-
-/* --------------------------------------------------
-   FIREBASE IMPORTS
--------------------------------------------------- */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { 
-    getDatabase, ref, onValue, remove 
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-import {
-    getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-/* --------------------------------------------------
-   FIREBASE CONFIG
--------------------------------------------------- */
+/* ---------------- FIREBASE CONFIG ---------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAbjjUJM8wzV23jeYEnGZ_qIBz2y_5IoDY",
   authDomain: "buzzer-5dbb9.firebaseapp.com",
   databaseURL: "https://buzzer-5dbb9-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "buzzer-5dbb9",
-  storageBucket: "buzzer-5dbb9.appspot.com",
-  messagingSenderId: "875632771159",
-  appId: "1:875632771159:web:9bd7cbda99e09a31f16312"
+  projectId: "buzzer-5dbb9"
 };
 
-/* --------------------------------------------------
-   INITIALIZE APP
--------------------------------------------------- */
-const app = initializeApp(firebaseConfig);
-const db  = getDatabase(app);
-const auth = getAuth();
-
-/* --------------------------------------------------
-   ADMIN EMAIL (CHANGE THIS)
--------------------------------------------------- */
 const ADMIN_EMAIL = "4km4lnov@gmail.com";
 
-/* --------------------------------------------------
-   LIVE CLOCK
--------------------------------------------------- */
+/* ---------------- INIT ---------------- */
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth();
+
+/* ---------------- CLOCK ---------------- */
 function updateClock() {
     const now = new Date();
-    const date = now.toLocaleDateString("en-GB");
-    const time = now.toLocaleTimeString("en-GB", { hour12: false });
-    document.getElementById("clock").innerText = `${date} ${time}`;
+    document.getElementById("clock").innerText =
+        now.toLocaleDateString("en-GB") + " " +
+        now.toLocaleTimeString("en-GB", { hour12: false });
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-/* --------------------------------------------------
-   CHART SETUP
--------------------------------------------------- */
-const ctx = document.getElementById("attendanceChart");
-let attendanceChart = new Chart(ctx, {
+/* ---------------- CHART ---------------- */
+const chart = new Chart(document.getElementById("attendanceChart"), {
     type: "pie",
     data: {
         labels: ["Present", "Absent"],
@@ -182,148 +124,83 @@ let attendanceChart = new Chart(ctx, {
             data: [0, 0],
             backgroundColor: ["#28a745", "#dc3545"]
         }]
-    },
-    options: { responsive: true }
-});
-
-/* --------------------------------------------------
-   LOGIN BUTTON
--------------------------------------------------- */
-document.getElementById("loginBtn").onclick = () => {
-    const email = prompt("Enter admin email:");
-    const pass = prompt("Enter password:");
-
-    signInWithEmailAndPassword(auth, email, pass)
-        .then(() => alert("Login successful"))
-        .catch(() => alert("Login failed"));
-};
-
-/* --------------------------------------------------
-   AUTH STATE LISTENER
--------------------------------------------------- */
-onAuthStateChanged(auth, user => {
-    if (user && user.email === ADMIN_EMAIL) {
-        document.getElementById("resetBtn").style.display = "block";
-        document.getElementById("loginBtn").innerText = "LOGOUT";
-        document.getElementById("loginBtn").onclick = () => signOut(auth);
-    } else {
-        document.getElementById("resetBtn").style.display = "none";
-        document.getElementById("loginBtn").innerText = "ADMIN LOGIN";
     }
 });
 
-/* --------------------------------------------------
-   MANUAL RESET FUNCTION
--------------------------------------------------- */
-async function resetAttendance() {
-    if (!confirm("RESET all attendance?")) return;
+/* ---------------- LOGIN ---------------- */
+document.getElementById("loginBtn").onclick = () => {
+    const email = prompt("Admin email:");
+    const pass = prompt("Password:");
+    signInWithEmailAndPassword(auth, email, pass)
+        .catch(() => alert("Login failed"));
+};
 
-    const attendanceRef = ref(db, "attendance/");
+onAuthStateChanged(auth, user => {
+    if (user && user.email === ADMIN_EMAIL) {
+        resetBtn.style.display = "block";
+        loginBtn.innerText = "LOGOUT";
+        loginBtn.onclick = () => signOut(auth);
+    } else {
+        resetBtn.style.display = "none";
+        loginBtn.innerText = "ADMIN LOGIN";
+    }
+});
 
-    onValue(attendanceRef, async (snapshot) => {
-        snapshot.forEach(uidSnapshot => {
-            const uid = uidSnapshot.key;
-            const logsRef = ref(db, `attendance/${uid}/logs`);
-            remove(logsRef);
-        });
-    }, { onlyOnce: true });
+/* ---------------- RESET FIREBASE ---------------- */
+resetBtn.onclick = async () => {
+    if (!confirm("Reset all attendance?")) return;
+    await remove(ref(db, "attendance"));
+    alert("Attendance reset");
+};
 
-    alert("Attendance RESET successfully.");
-}
-
-document.getElementById("resetBtn").onclick = resetAttendance;
-
-/* --------------------------------------------------
-   AUTO RESET AT MIDNIGHT
--------------------------------------------------- */
-function scheduleMidnightReset() {
-    const now = new Date();
-    const midnight = new Date();
-    midnight.setHours(24, 0, 0, 0);
-
-    const timeUntilMidnight = midnight - now;
-
-    setTimeout(() => {
-        resetAttendance();
-        scheduleMidnightReset();
-    }, timeUntilMidnight);
-}
-scheduleMidnightReset();
-
-/* --------------------------------------------------
-   LOAD + SORT + DISPLAY ATTENDANCE
--------------------------------------------------- */
+/* ---------------- LOAD ATTENDANCE ---------------- */
 const tableBody = document.getElementById("studentTable");
-const attendanceRef = ref(db, "attendance/");
 
-onValue(attendanceRef, (snapshot) => {
+onValue(ref(db, "attendance"), snapshot => {
+    const students = [];
+    let present = 0;
 
-    const studentList = [];
-    let presentCount = 0;
+    snapshot.forEach(child => {
+        const matrix = child.key;
+        const name = child.child("name").val() || "Unknown";
 
-    snapshot.forEach(uidSnapshot => {
-
-        const uid = uidSnapshot.key;
-        const name = uidSnapshot.child("name").val() || "Unknown";
-
-        let lastTime = "-";
+        let date = "-";
+        let time = "-";
         let isPresent = false;
 
-        if (uidSnapshot.hasChild("logs")) {
-            const logs = uidSnapshot.child("logs").val();
-            const timestamps = Object.keys(logs);
-
-            if (timestamps.length > 0) {
-                const latest = timestamps[timestamps.length - 1];
-                const dateObj = new Date(parseInt(latest));
-
-                lastTime = dateObj.toLocaleString("en-GB", { hour12: false });
-                isPresent = true;
-            }
+        if (child.hasChild("logs")) {
+            const logs = child.child("logs").val();
+            date = logs.date || "-";
+            time = logs.time || "-";
+            isPresent = true;
         }
 
-        if (isPresent) presentCount++;
+        if (isPresent) present++;
 
-        studentList.push({
-            uid,
-            name,
-            lastTime,
-            isPresent
-        });
+        students.push({ matrix, name, date, time, isPresent });
     });
 
-    /* SORT: absent first, present last */
-    studentList.sort((a, b) => a.isPresent - b.isPresent);
+    students.sort((a, b) => a.isPresent - b.isPresent);
 
-    /* RENDER TABLE */
     tableBody.innerHTML = "";
-    studentList.forEach(student => {
-        const status = student.isPresent
-            ? `<span class="present">Present</span>`
-            : `<span class="absent">Not Present</span>`;
-
+    students.forEach(s => {
         tableBody.innerHTML += `
-            <tr>
-                <td>${student.uid}</td>
-                <td>${student.name}</td>
-                <td>${student.lastTime}</td>
-                <td>${status}</td>
-            </tr>
-        `;
+        <tr>
+            <td>${s.matrix}</td>
+            <td>${s.name}</td>
+            <td>${s.date}</td>
+            <td>${s.time}</td>
+            <td class="${s.isPresent ? "present" : "absent"}">
+                ${s.isPresent ? "CHECK-IN" : "NOT PRESENT"}
+            </td>
+        </tr>`;
     });
 
-    /* UPDATE CHART */
-    const total = studentList.length;
-    const absentCount = total - presentCount;
+    chart.data.datasets[0].data = [present, students.length - present];
+    chart.update();
 
-    attendanceChart.data.datasets[0].data = [presentCount, absentCount];
-    attendanceChart.update();
-
-    const presentPercent = total > 0 ? (presentCount / total * 100).toFixed(1) : 0;
-    const absentPercent = total > 0 ? (absentCount / total * 100).toFixed(1) : 0;
-
-    document.getElementById("percentText").innerHTML =
-        `Present: ${presentPercent}% | Absent: ${absentPercent}%`;
+    document.getElementById("percentText").innerText =
+        `Present: ${present} | Absent: ${students.length - present}`;
 });
 </script>
 
