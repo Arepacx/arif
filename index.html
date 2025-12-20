@@ -28,8 +28,9 @@ h1 { text-align: center; }
     font-size: 16px;
     cursor: pointer;
 }
+#addBtn { background: #28a745; }
 #resetBtn { background: #dc3545; }
-#addStudentBtn { background: #28a745; }
+#logoutBtn { background: #6c757d; }
 
 table {
     width: 100%;
@@ -38,63 +39,53 @@ table {
     margin-top: 20px;
 }
 th, td {
-    padding: 12px;
+    padding: 10px;
     text-align: center;
     border: 1px solid #ddd;
 }
-th {
-    background: #007bff;
+th { background: #007bff; color: white; }
+
+.actionBtn {
+    padding: 5px 10px;
+    margin: 2px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: none;
     color: white;
 }
-.present { color: green; font-weight: bold; }
-.absent { color: red; font-weight: bold; }
-
-#chartContainer {
-    width: 350px;
-    margin: 0 auto;
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    margin-top: 10px;
-}
+.editBtn { background: #ffc107; color: black; }
+.deleteBtn { background: #dc3545; }
 </style>
 </head>
 
 <body>
 
-<h1>RFID Attendance Dashboard</h1>
+<h1>RFID Student Management</h1>
 <div id="clock"></div>
 
 <button class="btn" id="loginBtn">ADMIN LOGIN</button>
-<button class="btn" id="addStudentBtn" style="display:none;">ADD NEW STUDENT</button>
+<button class="btn" id="addBtn" style="display:none;">ADD STUDENT</button>
 <button class="btn" id="resetBtn" style="display:none;">RESET ATTENDANCE</button>
-
-<div id="chartContainer">
-    <canvas id="attendanceChart"></canvas>
-    <div id="percentText"></div>
-</div>
 
 <table>
 <thead>
 <tr>
-    <th>Matric Number</th>
+    <th>UID</th>
     <th>Name</th>
-    <th>Date</th>
-    <th>Time</th>
-    <th>Status</th>
+    <th>Matrix</th>
+    <th>Action</th>
 </tr>
 </thead>
 <tbody id="studentTable"></tbody>
 </table>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, remove, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, onValue, set, update, remove } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-/* ---------- FIREBASE CONFIG ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAbjjUJM8wzV23jeYEnGZ_qIBz2y_5IoDY",
   authDomain: "buzzer-5dbb9.firebaseapp.com",
@@ -108,135 +99,118 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth();
 
-/* ---------- CLOCK ---------- */
-function updateClock() {
-    const now = new Date();
-    document.getElementById("clock").innerText =
-        now.toLocaleDateString("en-GB") + " " +
-        now.toLocaleTimeString("en-GB", { hour12: false });
-}
-setInterval(updateClock, 1000);
-updateClock();
+/* CLOCK */
+setInterval(() => {
+  const now = new Date();
+  document.getElementById("clock").innerText =
+    now.toLocaleDateString("en-GB") + " " +
+    now.toLocaleTimeString("en-GB", { hour12: false });
+}, 1000);
 
-/* ---------- CHART ---------- */
-const chart = new Chart(document.getElementById("attendanceChart"), {
-    type: "pie",
-    data: {
-        labels: ["Present", "Absent"],
-        datasets: [{
-            data: [0, 0],
-            backgroundColor: ["#28a745", "#dc3545"]
-        }]
-    }
-});
-
-/* ---------- LOGIN ---------- */
+/* LOGIN */
 loginBtn.onclick = () => {
-    const email = prompt("Admin email:");
-    const pass = prompt("Password:");
-    signInWithEmailAndPassword(auth, email, pass)
-        .catch(() => alert("Login failed"));
+  const email = prompt("Admin email:");
+  const pass = prompt("Password:");
+  signInWithEmailAndPassword(auth, email, pass)
+    .catch(() => alert("Login failed"));
 };
 
 onAuthStateChanged(auth, user => {
-    if (user && user.email === ADMIN_EMAIL) {
-        resetBtn.style.display = "block";
-        addStudentBtn.style.display = "block";
-        loginBtn.innerText = "LOGOUT";
-        loginBtn.onclick = () => signOut(auth);
-    } else {
-        resetBtn.style.display = "none";
-        addStudentBtn.style.display = "none";
-        loginBtn.innerText = "ADMIN LOGIN";
-    }
+  if (user && user.email === ADMIN_EMAIL) {
+    addBtn.style.display = "block";
+    resetBtn.style.display = "block";
+    loginBtn.innerText = "LOGOUT";
+    loginBtn.onclick = () => signOut(auth);
+  } else {
+    addBtn.style.display = "none";
+    resetBtn.style.display = "none";
+    loginBtn.innerText = "ADMIN LOGIN";
+  }
 });
 
-/* ---------- ADD NEW STUDENT (ADMIN ONLY) ---------- */
-addStudentBtn.onclick = async () => {
-    const uid = prompt("Enter RFID UID (example: 1E 24 71 05):");
-    if (!uid) return;
-
-    const name = prompt("Enter Student Name:");
-    if (!name) return;
-
-    const matrix = prompt("Enter Matrix Number:");
-    if (!matrix) return;
-
-    try {
-        await set(ref(db, `students/${uid.toUpperCase()}`), {
-            name: name.toUpperCase(),
-            matrix: matrix.toUpperCase()
-        });
-
-        alert("✅ Student added successfully");
-    } catch (e) {
-        alert("❌ Failed to add student");
-        console.error(e);
-    }
-};
-
-/* ---------- RESET ONLY STATUS / DATE / TIME ---------- */
-resetBtn.onclick = async () => {
-    if (!confirm("Reset attendance status only?")) return;
-
-    onValue(ref(db, "attendance"), snapshot => {
-        snapshot.forEach(child => {
-            remove(ref(db, `attendance/${child.key}/logs`));
-        });
-    }, { onlyOnce: true });
-
-    alert("Attendance reset: all students marked ABSENT");
-};
-
-/* ---------- LOAD ATTENDANCE ---------- */
+/* LOAD STUDENTS */
 const tableBody = document.getElementById("studentTable");
 
-onValue(ref(db, "attendance"), snapshot => {
-    const students = [];
-    let present = 0;
+onValue(ref(db, "students"), snapshot => {
+  tableBody.innerHTML = "";
 
-    snapshot.forEach(child => {
-        const matrix = child.key;
-        const name = child.child("name").val() || "Unknown";
+  snapshot.forEach(child => {
+    const uid = child.key;
+    const name = child.child("name").val();
+    const matrix = child.child("matrix").val();
 
-        let date = "-";
-        let time = "-";
-        let isPresent = false;
-
-        if (child.hasChild("logs")) {
-            const logs = child.child("logs").val();
-            date = logs.date || "-";
-            time = logs.time || "-";
-            isPresent = true;
-        }
-
-        if (isPresent) present++;
-
-        students.push({ matrix, name, date, time, isPresent });
-    });
-
-    students.sort((a, b) => a.isPresent - b.isPresent);
-
-    tableBody.innerHTML = "";
-    students.forEach(s => {
-        tableBody.innerHTML += `
-        <tr>
-            <td>${s.matrix}</td>
-            <td>${s.name}</td>
-            <td>${s.date}</td>
-            <td>${s.time}</td>
-            <td class="${s.isPresent ? "present" : "absent"}">
-                ${s.isPresent ? "CHECK-IN" : "ABSENT"}
-            </td>
-        </tr>`;
-    });
-
-    chart.data.datasets[0].data = [present, students.length - present];
-    chart.update();
-
-    document.getElementById("percentText").innerText =
-        `Present: ${present} | Absent: ${students.length - present}`;
+    tableBody.innerHTML += `
+      <tr>
+        <td>${uid}</td>
+        <td>${name}</td>
+        <td>${matrix}</td>
+        <td>
+          <button class="actionBtn editBtn"
+            onclick="editStudent('${uid}', '${name}', '${matrix}')">
+            EDIT
+          </button>
+          <button class="actionBtn deleteBtn"
+            onclick="deleteStudent('${uid}')">
+            DELETE
+          </button>
+        </td>
+      </tr>`;
+  });
 });
+
+/* ADD STUDENT */
+addBtn.onclick = async () => {
+  const uid = prompt("RFID UID:");
+  const name = prompt("Student Name:");
+  const matrix = prompt("Matrix Number:");
+
+  if (!uid || !name || !matrix) return;
+
+  await set(ref(db, `students/${uid.toUpperCase()}`), {
+    name: name.toUpperCase(),
+    matrix: matrix.toUpperCase()
+  });
+
+  alert("Student added");
+};
+
+/* EDIT STUDENT */
+window.editStudent = async (uid, oldName, oldMatrix) => {
+  const name = prompt("Edit Name:", oldName);
+  const matrix = prompt("Edit Matrix:", oldMatrix);
+
+  if (!name || !matrix) return;
+
+  await update(ref(db, `students/${uid}`), {
+    name: name.toUpperCase(),
+    matrix: matrix.toUpperCase()
+  });
+
+  alert("Student updated");
+};
+
+/* DELETE STUDENT */
+window.deleteStudent = async (uid) => {
+  if (!confirm(`Remove UID ${uid}?`)) return;
+
+  await remove(ref(db, `students/${uid}`));
+  await remove(ref(db, `attendance/${uid}`)); // optional cleanup
+
+  alert("Student removed");
+};
+
+/* RESET ATTENDANCE STATUS ONLY */
+resetBtn.onclick = async () => {
+  if (!confirm("Reset attendance status only?")) return;
+
+  onValue(ref(db, "attendance"), snapshot => {
+    snapshot.forEach(child => {
+      remove(ref(db, `attendance/${child.key}/logs`));
+    });
+  }, { onlyOnce: true });
+
+  alert("Attendance reset");
+};
 </script>
 
 </body>
