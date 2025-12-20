@@ -5,55 +5,55 @@
 <title>RFID Attendance Dashboard</title>
 
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-        background: #f4f4f4;
-    }
-    h1 { text-align: center; }
-    #clock {
-        text-align: center;
-        font-size: 20px;
-        margin-bottom: 20px;
-        font-weight: bold;
-    }
-    .btn {
-        display: block;
-        margin: 0 auto 10px;
-        padding: 10px 20px;
-        border: none;
-        background: #007bff;
-        color: white;
-        border-radius: 6px;
-        font-size: 16px;
-        cursor: pointer;
-    }
-    #resetBtn { background: #dc3545; }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        background: white;
-        margin-top: 20px;
-    }
-    th, td {
-        padding: 12px;
-        text-align: center;
-        border: 1px solid #ddd;
-    }
-    th {
-        background: #007bff;
-        color: white;
-    }
-    .present { color: green; font-weight: bold; }
-    .absent { color: red; font-weight: bold; }
-    #chartContainer {
-        width: 350px;
-        margin: 0 auto;
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        margin-top: 10px;
-    }
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #f4f4f4;
+}
+h1 { text-align: center; }
+#clock {
+    text-align: center;
+    font-size: 20px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+.btn {
+    display: block;
+    margin: 0 auto 10px;
+    padding: 10px 20px;
+    border: none;
+    background: #007bff;
+    color: white;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+}
+#resetBtn { background: #dc3545; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    margin-top: 20px;
+}
+th, td {
+    padding: 12px;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+th {
+    background: #007bff;
+    color: white;
+}
+.present { color: green; font-weight: bold; }
+.absent { color: red; font-weight: bold; }
+#chartContainer {
+    width: 350px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
 </style>
 </head>
 
@@ -90,7 +90,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-/* ---------------- FIREBASE CONFIG ---------------- */
+/* ---------- FIREBASE CONFIG ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAbjjUJM8wzV23jeYEnGZ_qIBz2y_5IoDY",
   authDomain: "buzzer-5dbb9.firebaseapp.com",
@@ -100,12 +100,11 @@ const firebaseConfig = {
 
 const ADMIN_EMAIL = "4km4lnov@gmail.com";
 
-/* ---------------- INIT ---------------- */
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth();
 
-/* ---------------- CLOCK ---------------- */
+/* ---------- CLOCK ---------- */
 function updateClock() {
     const now = new Date();
     document.getElementById("clock").innerText =
@@ -115,7 +114,7 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-/* ---------------- CHART ---------------- */
+/* ---------- CHART ---------- */
 const chart = new Chart(document.getElementById("attendanceChart"), {
     type: "pie",
     data: {
@@ -127,8 +126,8 @@ const chart = new Chart(document.getElementById("attendanceChart"), {
     }
 });
 
-/* ---------------- LOGIN ---------------- */
-document.getElementById("loginBtn").onclick = () => {
+/* ---------- LOGIN ---------- */
+loginBtn.onclick = () => {
     const email = prompt("Admin email:");
     const pass = prompt("Password:");
     signInWithEmailAndPassword(auth, email, pass)
@@ -146,14 +145,23 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-/* ---------------- RESET FIREBASE ---------------- */
+/* ---------- RESET ONLY STATUS / DATE / TIME ---------- */
 resetBtn.onclick = async () => {
-    if (!confirm("Reset all attendance?")) return;
-    await remove(ref(db, "attendance"));
-    alert("Attendance reset");
+    if (!confirm("Reset attendance status only?")) return;
+
+    const attendanceRef = ref(db, "attendance");
+
+    onValue(attendanceRef, snapshot => {
+        snapshot.forEach(child => {
+            const matrix = child.key;
+            remove(ref(db, `attendance/${matrix}/logs`));
+        });
+    }, { onlyOnce: true });
+
+    alert("Attendance status reset (all students absent)");
 };
 
-/* ---------------- LOAD ATTENDANCE ---------------- */
+/* ---------- LOAD ATTENDANCE ---------- */
 const tableBody = document.getElementById("studentTable");
 
 onValue(ref(db, "attendance"), snapshot => {
@@ -191,7 +199,7 @@ onValue(ref(db, "attendance"), snapshot => {
             <td>${s.date}</td>
             <td>${s.time}</td>
             <td class="${s.isPresent ? "present" : "absent"}">
-                ${s.isPresent ? "CHECK-IN" : "NOT PRESENT"}
+                ${s.isPresent ? "CHECK-IN" : "ABSENT"}
             </td>
         </tr>`;
     });
