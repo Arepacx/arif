@@ -29,6 +29,8 @@ h1 { text-align: center; }
     cursor: pointer;
 }
 #resetBtn { background: #dc3545; }
+#addStudentBtn { background: #28a745; }
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -46,6 +48,7 @@ th {
 }
 .present { color: green; font-weight: bold; }
 .absent { color: red; font-weight: bold; }
+
 #chartContainer {
     width: 350px;
     margin: 0 auto;
@@ -63,6 +66,7 @@ th {
 <div id="clock"></div>
 
 <button class="btn" id="loginBtn">ADMIN LOGIN</button>
+<button class="btn" id="addStudentBtn" style="display:none;">ADD NEW STUDENT</button>
 <button class="btn" id="resetBtn" style="display:none;">RESET ATTENDANCE</button>
 
 <div id="chartContainer">
@@ -87,7 +91,7 @@ th {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, remove, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 /* ---------- FIREBASE CONFIG ---------- */
@@ -137,28 +141,51 @@ loginBtn.onclick = () => {
 onAuthStateChanged(auth, user => {
     if (user && user.email === ADMIN_EMAIL) {
         resetBtn.style.display = "block";
+        addStudentBtn.style.display = "block";
         loginBtn.innerText = "LOGOUT";
         loginBtn.onclick = () => signOut(auth);
     } else {
         resetBtn.style.display = "none";
+        addStudentBtn.style.display = "none";
         loginBtn.innerText = "ADMIN LOGIN";
     }
 });
+
+/* ---------- ADD NEW STUDENT (ADMIN ONLY) ---------- */
+addStudentBtn.onclick = async () => {
+    const uid = prompt("Enter RFID UID (example: 1E 24 71 05):");
+    if (!uid) return;
+
+    const name = prompt("Enter Student Name:");
+    if (!name) return;
+
+    const matrix = prompt("Enter Matrix Number:");
+    if (!matrix) return;
+
+    try {
+        await set(ref(db, `students/${uid.toUpperCase()}`), {
+            name: name.toUpperCase(),
+            matrix: matrix.toUpperCase()
+        });
+
+        alert("✅ Student added successfully");
+    } catch (e) {
+        alert("❌ Failed to add student");
+        console.error(e);
+    }
+};
 
 /* ---------- RESET ONLY STATUS / DATE / TIME ---------- */
 resetBtn.onclick = async () => {
     if (!confirm("Reset attendance status only?")) return;
 
-    const attendanceRef = ref(db, "attendance");
-
-    onValue(attendanceRef, snapshot => {
+    onValue(ref(db, "attendance"), snapshot => {
         snapshot.forEach(child => {
-            const matrix = child.key;
-            remove(ref(db, `attendance/${matrix}/logs`));
+            remove(ref(db, `attendance/${child.key}/logs`));
         });
     }, { onlyOnce: true });
 
-    alert("Attendance status reset (all students absent)");
+    alert("Attendance reset: all students marked ABSENT");
 };
 
 /* ---------- LOAD ATTENDANCE ---------- */
